@@ -36,20 +36,32 @@ def upload_minio_original_files():
     # check if bucket exists.
     found = client.bucket_exists(MINIO_BUCKET)
     if found:
-        for path, subdirs, files in os.walk(TMP_FOLDER):
-            if path not in [TMP_FOLDER + 'inpi.db', TMP_FOLDER + 'rep_pp.csv', TMP_FOLDER + 'rep_pm.csv']:
-                for name in files:
-                    print(os.path.join(path, name))
-                    isFile = os.path.isfile(os.path.join(path, name))
-                    if isFile:
-                        client.fput_object(
-                            MINIO_BUCKET,
-                            "/"+PATH_MINIO
-                            + os.path.join(path, name).replace(
-                                TMP_FOLDER, ""
-                            ),
-                            os.path.join(path, name),
-                        )
+        for path, subdirs, files in os.walk(TMP_FOLDER+"flux-tc/"):
+            for name in files:
+                print(os.path.join(path, name))
+                isFile = os.path.isfile(os.path.join(path, name))
+                if isFile:
+                    client.fput_object(
+                        MINIO_BUCKET,
+                        "/"+PATH_MINIO
+                        + os.path.join(path, name).replace(
+                            TMP_FOLDER, ""
+                        ),
+                        os.path.join(path, name),
+                    )
+        for path, subdirs, files in os.walk(TMP_FOLDER+"stock/"):
+            for name in files:
+                print(os.path.join(path, name))
+                isFile = os.path.isfile(os.path.join(path, name))
+                if isFile:
+                    client.fput_object(
+                        MINIO_BUCKET,
+                        "/"+PATH_MINIO
+                        + os.path.join(path, name).replace(
+                            TMP_FOLDER, ""
+                        ),
+                        os.path.join(path, name),
+                    )
 
 # Etape de processing des données en amont du lancement de l'enrichissement de la bdd sqlite
 def concatFilesRep(type_file, name_concat, pattern):
