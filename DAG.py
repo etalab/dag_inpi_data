@@ -27,10 +27,10 @@ client = Minio(
 )
 
 TMP_FOLDER = '/tmp/inpi/'
-PATH_MINIO = 'inpi-test/'
+PATH_MINIO_INPI_DATA = 'inpi/'
+PATH_MINIO_PROCESSED_INPI_DATA = 'ae/'
 
-#yesterday = (datetime.today() - timedelta(days=1)).strftime('%Y-%m-%d')
-yesterday = datetime.today().strftime('%Y-%m-%d')
+yesterday = (datetime.today() - timedelta(days=1)).strftime('%Y-%m-%d')
 
 def upload_minio_original_files():
     # check if bucket exists.
@@ -43,7 +43,7 @@ def upload_minio_original_files():
                 if isFile:
                     client.fput_object(
                         MINIO_BUCKET,
-                        "/"+PATH_MINIO
+                        "/"+PATH_MINIO_INPI_DATA
                         + os.path.join(path, name).replace(
                             TMP_FOLDER, ""
                         ),
@@ -56,7 +56,7 @@ def upload_minio_original_files():
                 if isFile:
                     client.fput_object(
                         MINIO_BUCKET,
-                        "/"+PATH_MINIO
+                        "/"+PATH_MINIO_INPI_DATA
                         + os.path.join(path, name).replace(
                             TMP_FOLDER, ""
                         ),
@@ -92,7 +92,7 @@ def concatFilesRep(type_file, name_concat, pattern):
         print(name_concat + " ok")
 
 def get_latest_db():
-    client.fget_object("opendata", PATH_MINIO+"inpi.db", TMP_FOLDER+"inpi.db")
+    client.fget_object("opendata", PATH_MINIO_PROCESSED_INPI_DATA+"inpi.db", TMP_FOLDER+"inpi.db")
     concatFilesRep("stock", "_stock_rep", "*/*/*_5_rep.csv")
     concatFilesRep("flux-tc", "_flux_rep", "*/*/*_5_rep.csv")
     concatFilesRep("flux-tc", "_flux_rep_nouveau_modifie", "*/*/*6_rep_nouveau_modifie_EVT.csv")
@@ -200,9 +200,9 @@ def update_db(ti, **kwargs):
     print('csv saved ok')
 
 def upload_minio_enriched_files():
-    client.fput_object("opendata", PATH_MINIO+"rep_pm.csv", TMP_FOLDER+"rep_pm.csv",)
-    client.fput_object("opendata", PATH_MINIO+"rep_pp.csv", TMP_FOLDER+"rep_pp.csv",)
-    client.fput_object("opendata", PATH_MINIO+"inpi.db", TMP_FOLDER+"inpi.db",)
+    client.fput_object("opendata", PATH_MINIO_PROCESSED_INPI_DATA+"rep_pm.csv", TMP_FOLDER+"rep_pm.csv",)
+    client.fput_object("opendata", PATH_MINIO_PROCESSED_INPI_DATA+"rep_pp.csv", TMP_FOLDER+"rep_pp.csv",)
+    client.fput_object("opendata", PATH_MINIO_PROCESSED_INPI_DATA+"inpi.db", TMP_FOLDER+"inpi.db",)
 
 def check_emptiness():
     if len(glob.glob(TMP_FOLDER+'flux-tc/*')) != 0:
