@@ -1,7 +1,9 @@
+from this import d
 from airflow import DAG
 from datetime import datetime, timedelta
 from airflow.operators.python import PythonOperator, ShortCircuitOperator
 from airflow.operators.bash import BashOperator
+from operators.clean_folder import CleanFolderOperator
 from airflow.utils.dates import days_ago
 from airflow.models import Variable
 import os
@@ -10,14 +12,16 @@ import glob
 import unidecode
 import pandas as pd
 import sqlite3
+import requests
+import json
 
 MINIO_URL = Variable.get("MINIO_URL")
 MINIO_BUCKET = Variable.get("MINIO_BUCKET_OPENDATA")
-MINIO_USER = Variable.get("MINIO_USER")
-MINIO_PASSWORD = Variable.get("MINIO_SECRET_PASSWORD_OPENDATA")
+MINIO_USER = Variable.get("SECRET_MINIO_USER_OPENDATA")
+MINIO_PASSWORD = Variable.get("SECRET_MINIO_PASSWORD_OPENDATA")
 
-INPI_USER = Variable.get("INPI_USER")
-INPI_PWD = Variable.get("INPI_SECRET_PWD")
+INPI_USER = Variable.get("SECRET_INPI_USER")
+INPI_PWD = Variable.get("SECRET_INPI_PASSWORD")
 
 client = Minio(
     MINIO_URL,
@@ -213,6 +217,40 @@ def check_emptiness():
         else:
             return False
 
+def get_start_date_minio(ti):
+    r = requests.get('https://object.files.data.gouv.fr/opendata/ae/latest_inpi_date.json')
+    start_date = r.json()['latest_date']
+    dt_sd = datetime.strptime(start_date, '%Y-%m-%d')
+    start_date = datetime.strftime((dt_sd + timedelta(days=1)), '%Y-%m-%d')
+    ti.xcom_push(key='start_date', value=start_date) 
+
+def get_latest_files_from_start_date(ti):
+    start_date=ti.xcom_pull(key='start_date', task_ids='get_start_date')
+    start = datetime.strptime(start_date,'%Y-%m-%d')
+    end = datetime.today()-timedelta(days=1)
+    delta = end - start  # as timedelta
+    days = [datetime.strftime(start + timedelta(days=i),'%Y-%m-%d') for i in range(delta.days + 1)]
+    for day in days:
+        print('Retrieving inpi files from {}'.format(day))
+        get_latest_files_bash = BashOperator(
+            task_id='get_latest_files_bash',
+            bash_command='/opt/airflow/dags/inpi/get.sh '+day+' '+INPI_USER+' '+INPI_PWD,
+        )
+        get_latest_files_bash.execute(dict())
+
+def upload_latest_date_inpi_minio():
+    latest_date = datetime.strftime((datetime.today()-timedelta(days=1)),'%Y-%m-%d')
+    data = {}
+    data['latest_date'] = latest_date
+    with open(TMP_FOLDER+"latest_inpi_date.json", "w") as write_file:
+        json.dump(data, write_file)    
+
+    client.fput_object(
+        bucket_name="opendata",
+        object_name=PATH_MINIO_PROCESSED_INPI_DATA+"latest_inpi_date.json",
+        file_path=TMP_FOLDER+"latest_inpi_date.json",
+        content_type="application/json"
+    )
 
 with DAG(
     dag_id='inpi-dirigeants',
@@ -223,9 +261,19 @@ with DAG(
     params={},
 ) as dag:
 
-    get_latest_files = BashOperator(
-        task_id='get_latest_files',
-        bash_command='/opt/airflow/dags/inpi/get.sh '+yesterday+' '+INPI_USER+' '+INPI_PWD,
+    clean_previous_outputs = CleanFolderOperator(
+        task_id="clean_previous_outputs",
+        folder_path=TMP_FOLDER
+    )
+
+    get_start_date = PythonOperator(
+        task_id="get_start_date", 
+        python_callable=get_start_date_minio
+    )
+
+    get_latest_files = PythonOperator(
+        task_id="get_latest_files", 
+        python_callable=get_latest_files_from_start_date
     )
 
     is_empty_folders = ShortCircuitOperator(
@@ -256,8 +304,18 @@ with DAG(
         python_callable=upload_minio_enriched_files
     )
 
+    upload_latest_date_inpi = PythonOperator(
+        task_id="upload_latest_date_inpi",
+        python_callable=upload_latest_date_inpi_minio
+    )
+
+    get_start_date.set_upstream(clean_previous_outputs)
+    get_latest_files.set_upstream(get_start_date)
     is_empty_folders.set_upstream(get_latest_files)
     upload_inpi_files_to_minio.set_upstream(is_empty_folders)
     get_latest_sqlite_db.set_upstream(is_empty_folders)
     update_sqlite_db.set_upstream(get_latest_sqlite_db)
     upload_result_files_to_minio.set_upstream(update_sqlite_db)
+
+    upload_latest_date_inpi.set_upstream(upload_result_files_to_minio)
+    upload_latest_date_inpi.set_upstream(upload_inpi_files_to_minio)

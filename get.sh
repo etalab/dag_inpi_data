@@ -5,14 +5,14 @@ PASS=`echo $3`
 DATETOPROCESS=`echo $1 | sed 's/-/\//g'`
 echo $DATETOPROCESS
 
-mkdir -p /tmp/inpi
-rm -rf /tmp/inpi/*
 mkdir -p /tmp/inpi/flux-tc
 mkdir -p /tmp/inpi/stock
 mkdir -p /tmp/inpi/synthese
 
 REGEX="/public/IMR_Donnees_Saisies/tc/flux/"$DATETOPROCESS"/*/*/*.csv"
 cd /tmp/inpi/flux-tc
+mkdir -p $DATETOPROCESS
+cd $DATETOPROCESS
 
 lftp ftp://opendata-rncs.inpi.fr << DOWNLOAD
   user $USER "$PASS"
@@ -30,7 +30,9 @@ done;
 fi
 
 REGEX="/public/IMR_Donnees_Saisies/tc/stock/"$DATETOPROCESS"/*.zip"
-cd ../stock
+cd /tmp/inpi/stock
+mkdir -p $DATETOPROCESS
+cd $DATETOPROCESS
 
 lftp ftp://opendata-rncs.inpi.fr << DOWNLOAD
   user $USER "$PASS"
