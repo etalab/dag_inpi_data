@@ -56,3 +56,5 @@ mkdir -p ${item1:2:4}/${item2:0:2}
 mv $f ${item1:2:4}/${item2:0:2}/
 done;
 fi
+
+echo "recuperation done!"
